@@ -1,4 +1,4 @@
-module github.com/tilt-dev/tilt-example-go
+module github.com/tilt-dev/tilt-example-bazel
 
 go 1.14
 
