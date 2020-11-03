@@ -52,10 +52,8 @@ func (r *ExampleRouter) updateTimeDisplay() string {
 }
 
 func (r *ExampleRouter) index(w http.ResponseWriter, req *http.Request) {
-	congrats := r.updateDuration != 0 && r.updateDuration < 2*time.Second
-	err := r.tmpl.ExecuteTemplate(w, "index.tmpl", map[string]interface{}{
+	err := r.tmpl.ExecuteTemplate(w, "index.tmpl", map[string]string{
 		"Duration": r.updateTimeDisplay(),
-		"Congrats": congrats,
 	})
 	if err != nil {
 		log.Printf("index: %v")
