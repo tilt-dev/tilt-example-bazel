@@ -1,0 +1,34 @@
+# -*- mode: Python -*-
+
+load('./bazel.Tiltfile', 'bazel_sourcefile_deps')
+
+# Records the current time, then kicks off a server update.
+# Normally, you would let Tilt do deploys automatically, but this
+# shows you how to set up a custom workflow that measures it.
+local_resource(
+    'deploy',
+    'python record-start-time.py',
+)
+
+# Use Bazel to generate the Kubernetes YAML
+for f in bazel_sourcefile_deps('//deployments:example-go'):
+  watch_file(f)
+k8s_yaml(local('bazel run //deployments:example-go'))
+
+# Use Bazel to build the image
+
+# The go_image BUILD rule
+image_target='//:example-go-image'
+
+# Where go_image puts the image in Docker (bazel/path/to/target:name)
+bazel_image='bazel:example-go-image'
+
+custom_build(
+  ref='example-go-image',
+  command=(
+    'bazel run --platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 {image_target} -- --norun && ' +
+    'docker tag {bazel_image} $EXPECTED_REF').format(image_target=image_target, bazel_image=bazel_image),
+  deps=bazel_sourcefile_deps(image_target),
+)
+
+k8s_resource('example-go', port_forwards=8000, resource_deps=['deploy'])
