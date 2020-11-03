@@ -24,9 +24,13 @@ k8s_yaml(local('bazel run //deployments:example-go'))
 image_target='//:example-go-image'
 binary_target='//:example-go'
 
+# Tilt works better if we watch the bazel output tree
+# directly instead of the ./bazel-bin symlinks.
+bazel_bin = str(local('bazel info bazel-bin')).strip()
+
 # Where go_binary puts the binary. You can determine this by building the
 # go_binary target and reading the output log.
-binary_target_local = './bazel-bin/example-go_/example-go'
+binary_target_local = os.path.join(bazel_bin, 'example-go_/example-go')
 
 # Where go_image puts the Go binary in the container. You can determine this
 # by shelling into the container with `kubectl exec -it [pod name] -- sh`
