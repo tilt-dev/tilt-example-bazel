@@ -30,7 +30,8 @@ binary_target_local = './bazel-bin/example-go_/example-go'
 
 # Where go_image puts the Go binary in the container. You can determine this
 # by shelling into the container with `kubectl exec -it [pod name] -- sh`
-binary_target_container = '/app/example-go-image.binary'
+container_workdir = '/app/example-go-image.binary.runfiles/__main__/'
+binary_target_container = container_workdir + 'example-go-image.binary_/example-go-image.binary'
 
 # Where go_image puts the image in Docker (bazel/path/to/target:name)
 bazel_image='bazel:example-go-image'
@@ -46,9 +47,9 @@ custom_build_with_restart(
     'bazel run --platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 {image_target} -- --norun && ' +
     'docker tag {bazel_image} $EXPECTED_REF').format(image_target=image_target, bazel_image=bazel_image),
   deps=['web', binary_target_local],
-  entrypoint='/app/example-go-image.binary',
+  entrypoint=binary_target_container,
   live_update=[
-    sync('web', '/app/web'),
+    sync('web', container_workdir + 'web'),
     sync(binary_target_local, binary_target_container)
   ],
 )
