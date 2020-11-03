@@ -20,6 +20,9 @@ go_binary(
 
 go_image(
     name = "example-go-image",
+    # For live_update to work well, we need to use a base image with 'tar' and 'sh' in it.
+    # (Bazel's default images are distroless with none of the standard unix tooling).
+    # This base image is declared in WORKSPACE.
     base = "@go_base_image//image",
     data = web_sources,
     embed = [":go_default_library"],
