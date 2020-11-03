@@ -1,8 +1,5 @@
-module github.com/tilt-dev/tilt-example-go
+module github.com/tilt-dev/tilt-example-bazel
 
 go 1.14
 
-require (
-	github.com/gobuffalo/packr v1.30.1
-	github.com/gorilla/mux v1.7.4
-)
+require github.com/gorilla/mux v1.7.4
