@@ -8,6 +8,24 @@ local_resource(
     'python record-start-time.py',
 )
 
-docker_build('example-go-image', '.', dockerfile='deployments/Dockerfile')
-k8s_yaml('deployments/kubernetes.yaml')
+# Use Bazel to generate the Kubernetes YAML
+watch_file('./deployments/example-go.yaml')
+k8s_yaml(local('bazel run //deployments:example-go'))
+
+# Use Bazel to build the image
+
+# The go_image BUILD rule
+image_target='//:example-go-image'
+
+# Where go_image puts the image in Docker (bazel/path/to/target:name)
+bazel_image='bazel:example-go-image'
+
+custom_build(
+  ref='example-go-image',
+  command=(
+    'bazel run --platforms=@io_bazel_rules_go//go/toolchain:linux_amd64 {image_target} -- --norun && ' +
+    'docker tag {bazel_image} $EXPECTED_REF').format(image_target=image_target, bazel_image=bazel_image),
+  deps=['main.go', 'start.go', 'web'],
+)
+
 k8s_resource('example-go', port_forwards=8000, resource_deps=['deploy'])
