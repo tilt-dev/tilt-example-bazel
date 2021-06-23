@@ -38,14 +38,31 @@ action_graph = decode_json(local([
   binary_target,
 ], quiet=True))
 
-actions = [action for action in action_graph['actions'] if action['mnemonic'] == 'GoLink']
-outputIDs = [outputID for action in actions for outputID in action['outputIds']]
-binary_target_local = [a['execPath'] for a in action_graph['artifacts'] if a['id'] in outputIDs][0]
+# If the image_target is a go_binary, it will have a GoLink action
+go_link_actions = [action for action in action_graph['actions'] if action['mnemonic'] == 'GoLink']
+# In our example this isn't used, but if your image were a nodejs_image you'd need the whole Bazel "runfiles"
+# which is constructed as a symlink tree
+symlink_tree_actions = [action for action in action_graph['actions'] if action['mnemonic'] == 'SymlinkTree']
 
-# Where go_image puts the Go binary in the container. You can determine this
-# by shelling into the container with `kubectl exec -it [pod name] -- sh`
-container_workdir = '/app/example-go-image.binary.runfiles/__main__/'
-binary_target_container = container_workdir + 'example-go-image.binary_/example-go-image.binary'
+if len(go_link_actions) == 1:
+  outputIDs = [outputID for action in go_link_actions for outputID in action['outputIds']]
+  binary_target_local = [a['execPath'] for a in action_graph['artifacts'] if a['id'] in outputIDs][0]
+
+  # Where go_image puts the Go binary in the container. You can determine this
+  # by shelling into the container with `kubectl exec -it [pod name] -- sh`
+  container_workdir = '/app/example-go-image.binary.runfiles/__main__/'
+  binary_target_container = container_workdir + 'example-go-image.binary_/example-go-image.binary'
+
+elif len(symlink_tree_actions) > 0:
+  outputIDs = [outputID for action in symlink_tree_actions for outputID in action['outputIds']]
+  outputFiles = [a['execPath'] for a in action_graph['artifacts'] if a['id'] in outputIDs]
+  # translate from the MANIFEST file path to the first-party monorepo outputs
+  # the tilt-example-bazel here is the name in our WORKSPACE
+  #   bazel-out/k8-fastbuild/bin/path/to.runfiles/MANIFEST
+  # -> 
+  #   bazel-out/k8-fastbuild/bin/path/to.runfiles/tilt-example-bazel
+  binary_target_local = outputFiles[0][:-len('/MANIFEST')] + '/tilt-example-bazel'
+  binary_target_container = '/'
 
 # Where go_image puts the image in Docker (bazel/path/to/target:name)
 bazel_image='bazel:example-go-image'
