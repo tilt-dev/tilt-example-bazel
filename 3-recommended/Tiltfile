@@ -24,18 +24,45 @@ k8s_yaml(local('bazel run //deployments:example-go'))
 image_target='//:example-go-image'
 binary_target='//:example-go'
 
-# Tilt works better if we watch the bazel output tree
-# directly instead of the ./bazel-bin symlinks.
-bazel_bin = str(local('bazel info bazel-bin')).strip()
+# Where go_binary puts the binary. We query Bazel's action graph and parse the response.
+# The path is not necessarily predictable across bazel rulesets, or even across releases
+# of the same ruleset. Even configuration flags passed to Bazel can affect the path.
+# See https://github.com/bazelbuild/rules_go/blob/dea7cd1/README.rst#how-do-i-access-go_binary-executables-from-go_test
+action_graph = decode_json(local([
+  'bazel',
+  'aquery',
+  '--output',
+  'jsonproto',
+  # Needed for compat with Bazel 3 and 4, see https://github.com/bazelbuild/bazel/issues/10358
+  '--noincompatible_proto_output_v2',
+  binary_target,
+], quiet=True))
 
-# Where go_binary puts the binary. You can determine this by building the
-# go_binary target and reading the output log.
-binary_target_local = os.path.join(bazel_bin, 'example-go_/example-go')
+# If the image_target is a go_binary, it will have a GoLink action
+go_link_actions = [action for action in action_graph['actions'] if action['mnemonic'] == 'GoLink']
+# In our example this isn't used, but if your image were a nodejs_image you'd need the whole Bazel "runfiles"
+# which is constructed as a symlink tree
+symlink_tree_actions = [action for action in action_graph['actions'] if action['mnemonic'] == 'SymlinkTree']
 
-# Where go_image puts the Go binary in the container. You can determine this
-# by shelling into the container with `kubectl exec -it [pod name] -- sh`
-container_workdir = '/app/example-go-image.binary.runfiles/__main__/'
-binary_target_container = container_workdir + 'example-go-image.binary_/example-go-image.binary'
+if len(go_link_actions) == 1:
+  outputIDs = [outputID for action in go_link_actions for outputID in action['outputIds']]
+  binary_target_local = [a['execPath'] for a in action_graph['artifacts'] if a['id'] in outputIDs][0]
+
+  # Where go_image puts the Go binary in the container. You can determine this
+  # by shelling into the container with `kubectl exec -it [pod name] -- sh`
+  container_workdir = '/app/example-go-image.binary.runfiles/__main__/'
+  binary_target_container = container_workdir + 'example-go-image.binary_/example-go-image.binary'
+
+elif len(symlink_tree_actions) > 0:
+  outputIDs = [outputID for action in symlink_tree_actions for outputID in action['outputIds']]
+  outputFiles = [a['execPath'] for a in action_graph['artifacts'] if a['id'] in outputIDs]
+  # translate from the MANIFEST file path to the first-party monorepo outputs
+  # the tilt-example-bazel here is the name in our WORKSPACE
+  #   bazel-out/k8-fastbuild/bin/path/to.runfiles/MANIFEST
+  # -> 
+  #   bazel-out/k8-fastbuild/bin/path/to.runfiles/tilt-example-bazel
+  binary_target_local = outputFiles[0][:-len('/MANIFEST')] + '/tilt-example-bazel'
+  binary_target_container = '/'
 
 # Where go_image puts the image in Docker (bazel/path/to/target:name)
 bazel_image='bazel:example-go-image'
